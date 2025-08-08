@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"main/global"
 	"time"
+	"url-shortener/global"
 )
 
 var db Database

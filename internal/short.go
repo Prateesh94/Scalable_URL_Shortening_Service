@@ -3,7 +3,7 @@ package internal
 import (
 	"crypto/sha256"
 	"encoding/base64"
-	"main/internal/database"
+	"url-shortener/internal/database"
 )
 
 func GenerateShortUrl(original_url string) string {

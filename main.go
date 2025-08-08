@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
-	"main/global"
-	"main/services"
 	"os"
+	"url-shortener/global"
+	"url-shortener/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"

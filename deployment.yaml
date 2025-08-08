@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: url-shortener
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: url-shortener
+  template:
+    metadata:
+      labels:
+        app: url-shortener
+    spec:
+      containers:
+      - name: url-shortener
+        image: prateesh94/url-shortener:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: ENV
+          value: "cloud"
+        # Write shards
+        - name: DATABASE_SHARD_1_URL
+          valueFrom:
+            secretKeyRef:
+              name: db-shard-1
+              key: url
+        - name: DATABASE_SHARD_2_URL
+          valueFrom:
+            secretKeyRef:
+              name: db-shard-2
+              key: url
+        - name: DATABASE_SHARD_3_URL
+          valueFrom:
+            secretKeyRef:
+              name: db-shard-3
+              key: url
+        - name: DATABASE_SHARD_4_URL
+          valueFrom:
+            secretKeyRef:
+              name: db-shard-4
+              key: url
+        - name: DATABASE_SHARD_5_URL
+          valueFrom:
+            secretKeyRef:
+              name: db-shard-5
+              key: url
+        # Read replicas
+        - name: DATABASE_SHARD_REPLICA_1_URL
+          valueFrom:
+            secretKeyRef:
+              name: db-replica-1
+              key: url
+        - name: DATABASE_SHARD_REPLICA_2_URL
+          valueFrom:
+            secretKeyRef:
+              name: db-replica-2
+              key: url
+        - name: DATABASE_SHARD_REPLICA_3_URL
+          valueFrom:
+            secretKeyRef:
+              name: db-replica-3
+              key: url
+        - name: DATABASE_SHARD_REPLICA_4_URL
+          valueFrom:
+            secretKeyRef:
+              name: db-replica-4
+              key: url
+        - name: DATABASE_SHARD_REPLICA_5_URL
+          valueFrom:
+            secretKeyRef:
+              name: db-replica-5
+              key: url
+        # Index database
+        - name: DATABASE_INDEX_URL
+          valueFrom:
+            secretKeyRef:
+              name: db-index
+              key: url
+        # Redis configuration
+        - name: REDIS_URL
+          value: "redis-master:6379"
+        - name: REDIS_PWD
+          valueFrom:
+            secretKeyRef:
+              name: redis-credentials
+              key: password

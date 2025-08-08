@@ -1,10 +1,10 @@
 package services
 
 import (
-	"main/global"
-	"main/internal"
-	"main/internal/database"
 	"os"
+	"url-shortener/global"
+	"url-shortener/internal"
+	"url-shortener/internal/database"
 
 	"github.com/gin-gonic/gin"
 )
