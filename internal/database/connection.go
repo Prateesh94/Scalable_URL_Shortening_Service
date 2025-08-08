@@ -12,7 +12,8 @@ import (
 // The Database interface abstracts our database layer, allowing us to swap
 // implementations without changing our core application logic.
 type Database interface {
-	GetConnection(ctx context.Context, key string) (*pgxpool.Pool, error)
+	GetWriteConnection(ctx context.Context, key string) (*pgxpool.Pool, error)
+	GetReadConnection(ctx context.Context, key string) (*pgxpool.Pool, error)
 	Close()
 }
 
@@ -21,7 +22,11 @@ type localDB struct {
 	pool *pgxpool.Pool
 }
 
-func (ld *localDB) GetConnection(ctx context.Context, key string) (*pgxpool.Pool, error) {
+func (ld *localDB) GetWriteConnection(ctx context.Context, key string) (*pgxpool.Pool, error) {
+
+	return ld.pool, nil
+}
+func (ld *localDB) GetReadConnection(ctx context.Context, key string) (*pgxpool.Pool, error) {
 
 	return ld.pool, nil
 }
@@ -35,26 +40,46 @@ func (ld *localDB) Close() {
 
 // shardedDB represents a pool of connections to multiple database shards.
 type shardedDB struct {
-	shards []*pgxpool.Pool
+	writeshards []*pgxpool.Pool
+	readshards  []*pgxpool.Pool
 }
 
-func (sd *shardedDB) GetConnection(ctx context.Context, key string) (*pgxpool.Pool, error) {
+func (sd *shardedDB) GetWriteConnection(ctx context.Context, key string) (*pgxpool.Pool, error) {
 	// In a real application, this function would contain sharding logic
 	// to pick the correct shard based on the key.
 	// For this example, we'll just pick the first shard.
 	hash := sha256.Sum256([]byte(key))
-	index := int(hash[0]) % len(sd.shards)
+	index := int(hash[0]) % len(sd.writeshards)
 	if key == "index" {
-		return sd.shards[len(sd.shards)-1], nil // Return the last shard for index queries
+		return sd.writeshards[len(sd.writeshards)-1], nil // Return the last shard for index queries
 	}
-	if len(sd.shards) == 0 {
+	if len(sd.writeshards) == 0 {
 		return nil, fmt.Errorf("no database shards configured")
 	}
-	return sd.shards[index], nil
+	return sd.writeshards[index], nil
+}
+func (sd *shardedDB) GetReadConnection(ctx context.Context, key string) (*pgxpool.Pool, error) {
+	// In a real application, this function would contain sharding logic
+	// to pick the correct shard based on the key.
+	// For this example, we'll just pick the first shard.
+	hash := sha256.Sum256([]byte(key))
+	index := int(hash[0]) % len(sd.readshards)
+	if key == "index" {
+		return sd.writeshards[len(sd.writeshards)-1], nil // Return the last shard for index queries
+	}
+	if len(sd.readshards) == 0 {
+		return nil, fmt.Errorf("no database shards configured")
+	}
+	return sd.readshards[index], nil
 }
 
 func (sd *shardedDB) Close() {
-	for _, pool := range sd.shards {
+	for _, pool := range sd.writeshards {
+		if pool != nil {
+			pool.Close()
+		}
+	}
+	for _, pool := range sd.readshards {
 		if pool != nil {
 			pool.Close()
 		}
@@ -83,10 +108,13 @@ func initDatabase() (Database, error) {
 	}
 
 	// Cloud/Production mode: load multiple connection strings
-	var shards []*pgxpool.Pool
+	var writeshards []*pgxpool.Pool
+	var readshards []*pgxpool.Pool
 	for i := 1; ; i++ {
 		key := fmt.Sprintf("DATABASE_SHARD_%d_URL", i)
+
 		connStr := os.Getenv(key)
+
 		if connStr == "" {
 			break // No more shards to configure
 		}
@@ -94,19 +122,33 @@ func initDatabase() (Database, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to shard %d: %w", i, err)
 		}
-		shards = append(shards, pool)
+		writeshards = append(writeshards, pool)
+
+	}
+	for i := 1; ; i++ {
+		key2 := fmt.Sprintf("DATABASE_SHARD_REPLICA_%d_URL", i)
+		connStr2 := os.Getenv(key2)
+		if connStr2 == "" {
+			break // No more shards to configure
+		}
+		pool2, err := pgxpool.New(context.Background(), connStr2)
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to replica shard %d: %w", i, err)
+		}
+		readshards = append(readshards, pool2)
 	}
 	connStr := os.Getenv("DATABASE_INDEX_URL")
 	pool, err := pgxpool.New(context.Background(), connStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to index database: %w", err)
 	} else {
-		shards = append(shards, pool)
+		writeshards = append(writeshards, pool)
 	}
-	if len(shards) == 0 {
+	if len(writeshards) == 0 {
 		return nil, fmt.Errorf("no database shards configured for cloud environment")
 	}
 
-	fmt.Printf("Successfully connected to %d database shards.", len(shards))
-	return &shardedDB{shards: shards}, nil
+	fmt.Printf("Successfully connected to %d database shards.", len(writeshards))
+	return &shardedDB{writeshards: writeshards, readshards: readshards}, nil
+
 }

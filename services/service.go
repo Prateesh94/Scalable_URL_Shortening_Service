@@ -4,9 +4,12 @@ import (
 	"main/global"
 	"main/internal"
 	"main/internal/database"
+	"os"
 
 	"github.com/gin-gonic/gin"
 )
+
+var runstate = os.Getenv("ENV")
 
 func GenerateShortUrlEndpoint(c *gin.Context) {
 	var data global.Data
@@ -32,11 +35,17 @@ func GenerateShortUrlEndpoint(c *gin.Context) {
 
 func GetOriginalUrlEndpoint(c *gin.Context) {
 	short_url := c.Param("short_url")
+	var original_url string
+	var err error
 	if short_url == "" {
 		c.JSON(400, gin.H{"error": "Short URL is required"})
 		return
 	}
-	original_url, err := database.RetrieveOriginalURL(short_url)
+	if runstate == "cloud" {
+		original_url, err = database.RetrieveOriginalURL(short_url)
+	} else {
+		original_url, err = database.GetOriginalUrl(short_url)
+	}
 	if err != nil {
 		c.JSON(500, gin.H{"error": "The short URL does not exist"})
 		return
@@ -47,14 +56,34 @@ func GetOriginalUrlEndpoint(c *gin.Context) {
 
 func DeleteShortUrlEndpoint(c *gin.Context) {
 	short_url := c.Param("short_url")
+	var err error
 	if short_url == "" {
 		c.JSON(400, gin.H{"error": "Short URL is required"})
 		return
 	}
-	err := database.DeleteCacheUrl(short_url)
+	if runstate == "cloud" {
+		err = database.DeleteCacheUrl(short_url)
+	} else {
+		err = database.DeleteShortUrl(short_url)
+	}
+
 	if err != nil {
 		c.JSON(500, gin.H{"error": "Failed to delete short URL, it may not exist"})
 		return
 	}
 	c.JSON(200, gin.H{"message": "Short URL deleted successfully"})
+}
+
+func GetCountEndpoint(c *gin.Context) {
+	short_url := c.Param("short_url")
+	if short_url == "" {
+		c.JSON(400, gin.H{"error": "Short URL is required"})
+		return
+	}
+	count, err := database.GetCount(short_url)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to retrieve count for the short URL"})
+		return
+	}
+	c.JSON(200, gin.H{"url": short_url, "count": count})
 }

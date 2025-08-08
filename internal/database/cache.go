@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"time"
@@ -25,7 +26,8 @@ func RetrieveOriginalURL(shortURL string) (string, error) {
 	// 1. Try to get the original URL from the cache
 	originalURL, err := rdb.Get(ctx, shortURL).Result()
 	if err == nil {
-		// Cache hit! 🎉
+		// Cache hit!
+		fmt.Printf("Cache hit for %s: %s\n", shortURL, originalURL)
 		UpdateCount(shortURL) // Update the count in the database
 		return originalURL, nil
 	}
@@ -46,10 +48,11 @@ func RetrieveOriginalURL(shortURL string) (string, error) {
 	// We set a TTL of 1 hour to keep the data fresh.
 	ttl := 30 * time.Minute
 	err = rdb.Set(ctx, shortURL, dbOriginalURL, ttl).Err()
+
 	if err != nil {
 		log.Printf("Failed to set cache for %s: %v", shortURL, err)
 	}
-
+	// Update the count in the database
 	return dbOriginalURL, nil
 }
 
